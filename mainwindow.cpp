@@ -31,14 +31,21 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->generateButton1, SIGNAL(clicked()), this, SLOT(genJobFile()));
 }
 
+
+
 MainWindow::~MainWindow()
 {
     delete ui;
 }
 
+
+
 void MainWindow::getTemplateFile() {
 
     templateFilePath = QFileDialog::getOpenFileName(this, tr("Open File"), "/home", tr("Templates (*.txt)"));
+
+    ui->templateFileLabel->setText(templateFilePath);
+    if (templateFilePath == "") return;
 
     auto lastIndex{ templateFilePath.lastIndexOf('/') };
     auto secondLastIndex{ templateFilePath.lastIndexOf('/', lastIndex - 1) };
@@ -47,7 +54,12 @@ void MainWindow::getTemplateFile() {
     ui->templateFileLabel->setText("..." + fileName);
 };
 
+
+
 void MainWindow::startManualSetup() {
+
+
+    // Try to open template file ----------------------------
 
     if (templateFilePath == "") {
         QMessageBox::warning(this, tr("My Application"), tr("No template file selected."));
@@ -64,6 +76,12 @@ void MainWindow::startManualSetup() {
         return;
     }
 
+    // ------------------------------------------------------
+
+
+
+    // Parse template file ----------------------------------
+
     std::string templateLine{};
     int i = 0;
 
@@ -72,67 +90,144 @@ void MainWindow::startManualSetup() {
         QString lineText{ QString::fromStdString(templateLine) };
         templateLines.push_back(lineText);
 
-        auto tagBegin{ lineText.indexOf("{%") };
-        auto tagEnd{ lineText.indexOf("%}") };
-        int tagSize{ 2 };
-        int sliceBegin;
-        int sliceEnd;
+        bool endOfLine = false;
+        int prevTagBegin = 0;
+        int prevTagEnd = 0;
 
-        if (tagBegin != -1 && tagEnd != -1) {
+        while (!endOfLine) {
 
-            sliceBegin = tagBegin + tagSize;
-            while (lineText[sliceBegin] == ' ') {
-                sliceBegin++;
+            auto tagBegin{ lineText.indexOf("{%", prevTagBegin + 1) };
+            auto tagEnd{ lineText.indexOf("%}", prevTagEnd + 1) };
+            int tagSize{ 2 };
+            int sliceBegin;
+            int sliceEnd;
+
+            if (tagBegin != -1 && tagEnd != -1) {
+
+                // Delete any spaces after tag start
+                sliceBegin = tagBegin + tagSize;
+                while (lineText[sliceBegin] == ' ') {
+                    sliceBegin++;
+                }
+
+                // Delete any spaces before tag end
+                sliceEnd = (tagEnd + 1) - tagSize;
+                while (lineText[sliceEnd] == ' ') {
+                    sliceEnd--;
+                }
+
+                TagData newTag;
+                newTag.name = lineText.sliced(sliceBegin, (sliceEnd + 1) - sliceBegin);
+                tagData.push_back(newTag);
+
+                prevTagBegin = tagBegin;
+                prevTagEnd = tagEnd;
+            } else {
+                endOfLine = true;
             }
-
-            sliceEnd = (tagEnd + 1) - tagSize;
-            while (lineText[sliceEnd] == ' ') {
-                sliceEnd--;
-            }
-
-            tagNames.push_back(lineText.sliced(sliceBegin, (sliceEnd + 1) - sliceBegin));
-            tagPositions.push_back(i);
         }
 
         i++;
     }
 
-    for (int i = 0; i < tagNames.size(); ++i) {
+    // -----------------------------------------------------------
+
+
+
+    // Clean duplicate tags --------------------------------------
+
+    std::vector<int> tagRemovePositions;
+    for (int i = 0; i < tagData.size(); i++) {
+        for (int j = 0; j < tagData.size(); j++) {
+            if (tagData[i].name == tagData[j].name && i != j)
+                tagRemovePositions.push_back(j);
+        }
+    }
+
+    std::vector<TagData> cleanedData;
+    for (int i = 0; i < tagData.size(); i++) {
+
+        bool cleanTag = true;
+
+        for (int j = 0; j < tagRemovePositions.size(); j+=2) {
+            if (i == tagRemovePositions[j])
+                cleanTag = false;
+        }
+
+        if (cleanTag)
+            cleanedData.push_back(tagData[i]);
+    }
+
+    tagData = cleanedData;
+
+    // ---------------------------------------------------------
+
+
+
+
+    // Update UI -----------------------------------------------
+
+    for (int i = 0; i < tagData.size(); ++i) {
+
         items.push_back(new QListWidgetItem());
         itemWidgets.push_back(new TagListItem());
 
-        itemWidgets[i]->setText(tagNames[i]);
+        itemWidgets[i]->setText(tagData[i].name);
         items[i]->setSizeHint(itemWidgets[i]->sizeHint());
 
         ui->manualListWidget->addItem(items[i]);
         ui->manualListWidget->setItemWidget(items[i], itemWidgets[i]);
+
     }
 
     ui->stackedWidget->setCurrentWidget(ui->manualSetupPage);
+
+    // ---------------------------------------------------------
 }
+
+
 
 void MainWindow::getManualSetupData() {
 
-    if (tagData.size() > 0) return;
+    // Get user input from UI ---------------------------------
 
     for (int i = 0; i < itemWidgets.size(); i++) {
         QString data = itemWidgets[i]->getData();
 
         if (data != "")
-            tagData.push_back(itemWidgets[i]->getData());
+            tagData[i].value = itemWidgets[i]->getData();
     }
+
+    // --------------------------------------------------------
 }
+
+
 
 void MainWindow::saveManualInput() {
 
     getManualSetupData();
 
-    if (tagData.size() == 0) {
+    // Check if user has missed any fields -------------------
+
+    bool isEmpty = false;
+
+    for (int i = 0; i < itemWidgets.size(); ++i) {
+        if (itemWidgets[i]->getData() == "")
+            isEmpty = true;
+    }
+
+    if (isEmpty) {
         QMessageBox msgBox;
-        msgBox.setText("No data to save.");
+        msgBox.setText("Missing data from input fields.");
         msgBox.exec();
         return;
     }
+
+    // -------------------------------------------------------
+
+
+
+    // Save data to csv file ---------------------------------
 
     auto lastIndex{ templateFilePath.lastIndexOf('/') };
     saveFilePath = QFileDialog::getSaveFileName(this, tr("Save Input to File"), templateFilePath.first(lastIndex + 1), tr("CSV (*.csv)"));
@@ -143,8 +238,8 @@ void MainWindow::saveManualInput() {
 
     saveFile << "Tag Name:" << "," << "Tag Data:" << ",\n";
 
-    for (int i = 0; i < tagNames.size(); i++) {
-        saveFile << tagNames[i].toStdString() << "," << tagData[i].toStdString() << ",\n";
+    for (int i = 0; i < tagData.size(); i++) {
+        saveFile << tagData[i].name.toStdString() << "," << tagData[i].value.toStdString() << ",\n";
     }
 
     saveFile.close();
@@ -152,12 +247,20 @@ void MainWindow::saveManualInput() {
     QMessageBox msgBox;
     msgBox.setText("The input was succesfully saved at: " + saveFilePath);
     msgBox.exec();
+
+    // --------------------------------------------------------
 }
+
+
 
 void MainWindow::getManualInput() {
 
+    // Try to open file ---------------------------------------
+
     auto lastIndex{ templateFilePath.lastIndexOf('/') };
     saveFilePath = QFileDialog::getOpenFileName(this, tr("Load Tag Inputs from File"), templateFilePath.first(lastIndex + 1), tr("CSV (*.csv)"));
+
+    if (saveFilePath == "") return;
 
     std::ifstream inputFile{ saveFilePath.toStdString() };
 
@@ -168,6 +271,12 @@ void MainWindow::getManualInput() {
         fileError.exec();
         return;
     }
+
+    // --------------------------------------------------------
+
+
+
+    // Read data from file ------------------------------------
 
     std::vector<std::string> rows{};
     std::string data{};
@@ -183,7 +292,11 @@ void MainWindow::getManualInput() {
         }
     }
 
-    tagData.clear();
+    // ---------------------------------------------------------
+
+
+
+    // Update program variables and UI -------------------------
 
     for (int i = 0; i < rows.size(); i++) {
 
@@ -191,21 +304,29 @@ void MainWindow::getManualInput() {
         auto firstIndex{ row.indexOf(',') };
         auto secondIndex{ row.indexOf(',', firstIndex + 1) };
 
-        if (tagNames[i] == row.first(firstIndex) && secondIndex != -1) {
-            tagData.push_back(row.sliced(firstIndex + 1, (secondIndex - firstIndex) - 1));
-            itemWidgets[i]->setData(tagData[i]);
-        } else if (tagNames[i] == row.first(firstIndex) && secondIndex == -1) {
-            tagData.push_back(row.sliced(firstIndex + 1, (row.size() - firstIndex) - 1));
-            itemWidgets[i]->setData(tagData[i]);
+        if (tagData[i].name == row.first(firstIndex) && secondIndex != -1) {
+            tagData[i].value = row.sliced(firstIndex + 1, (secondIndex - firstIndex) - 1);
+            itemWidgets[i]->setData(tagData[i].value);
+        } else if (tagData[i].name == row.first(firstIndex) && secondIndex == -1) {
+            tagData[i].value = row.sliced(firstIndex + 1, (row.size() - firstIndex) - 1);
+            itemWidgets[i]->setData(tagData[i].value);
         }
     }
+
+    // ----------------------------------------------------------
 }
+
+
 
 void MainWindow::startAutoSetup() {
 
 }
 
+
+
 void MainWindow::genJobFile() {
+
+    // Get data from either manual or automatic method -------
 
     if (ui->stackedWidget->currentWidget() == ui->manualSetupPage) {
         getManualSetupData();
@@ -213,12 +334,31 @@ void MainWindow::genJobFile() {
         // getAutoSetupData();
     }
 
-    if (tagData.size() == 0) {
+    // -------------------------------------------------------
+
+
+
+    // Check if user has missed any fields -------------------
+
+    bool isEmpty = false;
+
+    for (int i = 0; i < itemWidgets.size(); ++i) {
+        if (itemWidgets[i]->getData() == "")
+            isEmpty = true;
+    }
+
+    if (isEmpty) {
         QMessageBox msgBox;
-        msgBox.setText("No data to generate job script.");
+        msgBox.setText("Missing data from input fields.");
         msgBox.exec();
         return;
     }
+
+    // -------------------------------------------------------
+
+
+
+    // Open save file ----------------------------------------
 
     auto lastIndex{ templateFilePath.lastIndexOf('/') };
     saveFilePath = QFileDialog::getSaveFileName(this, tr("Generate Script"), templateFilePath.first(lastIndex + 1));
@@ -227,16 +367,85 @@ void MainWindow::genJobFile() {
 
     std::ofstream jobFile{ saveFilePath.toStdString() };
 
-    for (int i = 0; i < tagData.size(); i++) {
+    // -------------------------------------------------------
 
-        QString lineText{ templateLines[tagPositions[i]] };
-        auto tagBegin{ lineText.indexOf("{%") };
-        auto tagEnd{ lineText.indexOf("%}") };
 
-        if (tagBegin != -1 && tagEnd != -1) {
-            templateLines[tagPositions[i]] = lineText.replace(tagBegin, tagBegin + tagEnd, tagData[i]);
+
+    // Fill in tag data --------------------------------------
+
+    for (int i = 0; i < templateLines.size(); i++) {
+
+        QString lineText{ templateLines[i] };
+        QString filledLineText{};
+
+        if(lineText == "") continue;
+
+        bool endOfLine = false;
+        bool tagFound = false;
+        int prevTagBegin = 0;
+        int prevTagEnd = 0;
+
+        while (!endOfLine) {
+
+            auto tagBegin{ lineText.indexOf("{%", prevTagBegin + 1) };
+            auto tagEnd{ lineText.indexOf("%}", prevTagEnd + 1) };
+            int tagSize{ 2 };
+            int sliceBegin;
+            int sliceEnd;
+
+            if (tagBegin != -1 && tagEnd != -1) {
+
+                tagFound = true;
+
+                if (prevTagEnd == 0) {
+                    filledLineText += lineText.sliced(prevTagEnd, tagBegin - prevTagEnd);
+                } else {
+                    filledLineText += lineText.sliced(prevTagEnd + tagSize, tagBegin - (prevTagEnd+ tagSize));
+                }
+
+                // Delete any spaces after tag start
+                sliceBegin = tagBegin + tagSize;
+                while (lineText[sliceBegin] == ' ') {
+                    sliceBegin++;
+                }
+
+                // Delete any spaces before tag end
+                sliceEnd = (tagEnd + 1) - tagSize;
+                while (lineText[sliceEnd] == ' ') {
+                    sliceEnd--;
+                }
+
+                QString tagName = lineText.sliced(sliceBegin, (sliceEnd + 1) - sliceBegin);
+
+                for (int j = 0; j < tagData.size(); j++) {
+                    if (tagName == tagData[j].name){
+                        filledLineText += tagData[j].value;
+                        break;
+                    }
+                }
+
+                prevTagBegin = tagBegin;
+                prevTagEnd = tagEnd;
+            } else {
+
+                if (tagFound) {
+                    filledLineText += lineText.sliced(prevTagEnd + tagSize, lineText.size() - (prevTagEnd+ tagSize));
+                } else{
+                    filledLineText = lineText;
+                }
+
+                endOfLine = true;
+            }
         }
+
+        templateLines[i] = filledLineText;
     }
+
+    // -------------------------------------------------------
+
+
+
+    // Save data to file -------------------------------------
 
     for (int i = 0; i < templateLines.size(); i++) {
         jobFile << templateLines[i].toStdString() << '\n';
@@ -248,11 +457,21 @@ void MainWindow::genJobFile() {
     msgBox.setText("The job script was generated at: " + saveFilePath);
     msgBox.exec();
 
+    // --------------------------------------------------------
+
+
+
+    // Wipe data and return to start --------------------------
+
     templateFilePath = "";
     ui->templateFileLabel->setText("");
 
     returnToStart();
+
+    // --------------------------------------------------------
 }
+
+
 
 void MainWindow::returnToStart() {
 
@@ -260,9 +479,7 @@ void MainWindow::returnToStart() {
 
     items.clear();
     itemWidgets.clear();
-    tagNames.clear();
     tagData.clear();
-    tagPositions.clear();
 
     ui->stackedWidget->setCurrentWidget(ui->mainPage);
 }

@@ -8,6 +8,11 @@
 #include <QListWidgetItem>
 #include <vector>
 
+struct TagData {
+    QString name;
+    QString value;
+};
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -39,13 +44,11 @@ private:
     Ui::MainWindow *ui;
     QString templateFilePath;
     std::vector<QString> templateLines;
-    std::vector<QString> tagNames;
 
     std::vector<QListWidgetItem*> items;
     std::vector<TagListItem*> itemWidgets;
 
-    std::vector<QString> tagData;
-    std::vector<int> tagPositions;
+    std::vector<TagData> tagData;
     QString saveFilePath;
 
     void getManualSetupData();

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Slurm job options (name, compute nodes, job time)
+
+#SBATCH --job-name={% Job Name %}
+#SBATCH --time={% Simulation time %}
+#SBATCH --nodes={% Number of nodes %}
+#SBATCH --tasks-per-node={% Tasks per node %}
+#SBATCH --cpus-per-task={% CPUs per task %}
+
+# Replace [budget code] below with your budget code (e.g. t01)
+#SBATCH --account={% Account %}
+# Replace [partition name] below with your partition name (e.g. standard,gpu)
+#SBATCH --partition={% Partition %}
+# Replace [qos name] below with your qos name (e.g. standard,long,gpu)
+#SBATCH --qos={% Quality of service %}
+
+# Load the default HPE MPI environment
+module load mpt
+
+export SGI_MPI_HOME=$MPI_ROOT
+export STARCCM_EXE=/work/tc051/tc051/ugracing/starccm+_17.02.008/STAR-CCM+17.02.008-R8/star/bin
+export PATH=${STARCCM_EXE}:${PATH}
+export LM_LICENSE_FILE=1999@flex.cd-adapco.com
+export CDLMD_LICENSE_FILE=1999@flex.cd-adapco.com
+
+#export LIBNSL_PATH=/scratch/sw/libnsl/1.3.0/
+export LIBNSL_PATH=/work/y07/shared/cirrus-software/libnsl/1.3.0/
+
+scontrol show hostnames $SLURM_NODELIST > ./starccm.launcher.host.$SLURM_JOB_ID.txt
+
+starccm+ -clientldlibpath ${LIBNSL_PATH}/lib -ldlibpath ${LIBNSL_PATH}/lib -userdir {% Working directory %} -nbuserdir {% Working directory %} -power -podkey {% Power on demand key %} -licpath 1999@flex.cd-adapco.com -machinefile ./starccm.launcher.host.$SLURM_JOB_ID.txt -np {% Number of CPUs in total %} -rsh ssh -batch {% Macro file name %} {% Simulation file name %}
