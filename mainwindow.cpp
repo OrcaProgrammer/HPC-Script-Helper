@@ -38,7 +38,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::getTemplateFile() {
 
-    templateFilePath = QFileDialog::getOpenFileName(this, tr("Open File"), "/home", tr("Templates (*.tpl)"));
+    templateFilePath = QFileDialog::getOpenFileName(this, tr("Open File"), "/home", tr("Templates (*.txt)"));
 
     auto lastIndex{ templateFilePath.lastIndexOf('/') };
     auto secondLastIndex{ templateFilePath.lastIndexOf('/', lastIndex - 1) };
