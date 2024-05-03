@@ -8,7 +8,7 @@ To install the HPC Script Helper, clone the github repository or download a zip 
 
 ## Usage:
 
-The HPC Script Helper takes in templates for different styles of job files. This lets the user customise what data they want to input for a given template. The templates are .txt text files with tags inside to represent where the user would want data to be injected. A tag is opened with {% and closed with %}. Anything in-between the tag open and close will be used as field names for data input. For example:
+The HPC Script Helper takes in templates for different styles of job files. This lets the user customise what data they want to input for a given template. The templates are .txt text files with tags inside to represent where the user would want data to be injected. Examples for templates can be found inside the /template_examples/ folder. A tag is opened with {% and closed with %}. Anything in-between the tag open and close will be used as field names for data input. For example:
 
 '{% Number of cores %}'
 
