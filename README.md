@@ -1,6 +1,6 @@
 # HPC Script Helper
 
-HPC Script Helper is a tool to generate job files using templates for use a in high performance computer (HPC). The goal of the tool is to speed up the process of creating job files to submit to a HPC. Currently the HPC Script Helper is only available on Windows.
+HPC Script Helper is a tool to generate job files using templates for use in a high performance computer (HPC). The goal of the tool is to speed up the process of creating job files to submit to a HPC. Currently the HPC Script Helper is only available on Windows.
 
 ## Installation:
 
